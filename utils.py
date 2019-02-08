@@ -29,6 +29,15 @@ def rand_card():
         candidate = random.randrange(1,38)
     return candidate
 
+
+def rand_card_no_single():
+    invalid_set = set([10,20,30])
+    candidate = random.randrange(1,30)
+    while candidate in invalid_set:
+        candidate = random.randrange(1,30)
+    return candidate
+
+
 def rand_single_color(l=13):
     cnt = 0
     d = {}
@@ -45,5 +54,10 @@ def rand_single_color(l=13):
         result += [k]*v
     return result
 
+
 def rand_seq(l=13):
     return [rand_card() for _ in range(l)]
+
+
+def rand_seq_no_single(l=13):
+    return [rand_card_no_single() for _ in range(l)]

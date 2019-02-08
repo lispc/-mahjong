@@ -1,15 +1,11 @@
 from collections import defaultdict
 import copy
 from utils import *
+from constants import *
+import operator
 
 
 def scatter(slots, num):
-    """
-
-    :param slots: {'a':2,'b':2}
-    :param num: 3
-    :return: [{'a':1,'b':2}, {'a':2,'b':1}]
-    """
     if sum(slots.values()) < num:
         return []
     if num == 0:
@@ -142,17 +138,22 @@ class ActiveSets:  # single color
                 else:
                     assert False, 'wtf' + repr(item)
             result.add((three_count, two_count))
-        s = sorted(result, reverse=True)
-        result = [s[0]]
-        for item in s[1:]:
-            skip = False
-            for c in result:
-                if c[0] >= item[0] and c[1] >= item[1]:
-                    skip = True
-                    break
-            if not skip:
-                result.append(item)
-        return result
+        return vec_strip(result)
+
+
+def vec_strip(x):
+    s = sorted(x, reverse=True)
+    result = [s[0]]
+    for item in s[1:]:
+        skip = False
+        for c in result:
+            if c[0] >= item[0] and c[1] >= item[1]:
+                skip = True
+                break
+        if not skip:
+            result.append(item)
+    return result
+
 
 class Seq:
     def __init__(self, start, length):
@@ -160,30 +161,21 @@ class Seq:
         self.length = length
 
 
-def count(x):
-    result = defaultdict(int)
-    for item in x:
-        defaultdict[result] += 1
-    return result
+def color_stat(l):
+    sets = ActiveSets()
+    sets.from_list(l)
+    return sets.get_gram_stat()
 
 
 def assert_same(x):
     assert len(count(x).keys()) == 1, str(x) + ' should have only one type'
 
 
-def join_list(xs, ys):
-    return [x + y for x in xs for y in ys]
+def join_list(xs, ys, f=operator.add):
+    return [f(x, y) for x in xs for y in ys]
 
 
 def to_slice(i, max_len=3):
-    """
-            to_slice(4) = [
-                [1,1,1,1],
-                [2,1,1],
-                [2,2],
-                [3,1],
-            ]
-        """
     if i == 0:
         return [[]]
     result = []
@@ -192,24 +184,118 @@ def to_slice(i, max_len=3):
     return result
 
 
-'''
-def to_slice(x):
-    """
-        to_slice([5,5,5,5]) = [
-            [[5,5,5],[5]],
-            [[5,5],[5,5]],
-            [[5,5],[5],[5]],
-            [[5],[5],[5],[5]],
-        ]
-    """
-    max_valid_len = 3
-    if True or len(x) != 0:
-        assert_same(x)
-    if len(x) == 1:
-        return [[[x[0]]]]
-    result = []
-    for l in range(len(x) - 1, 0, -1):
-        result.append(join([x[:l]], to_slice(x[l:])))
+def handle_single(n):
+    if n == 1:
+        return [(0,0)]
+    if n == 2:
+        return [(0,1)]
+    if n == 3:
+        return [(1,0),(0,1)]
+    if n == 4:
+        return [(1,0),(0,2)]
+
+
+def pair_adder(x, y):
+    return x[0]+y[0], x[1]+y[1]
+
+
+def handle_singles(l):
+    c = count(l)
+    seed = [(0,0)]
+    for k, v in c.items():
+        seed = vec_strip(join_list(seed, handle_single(v), pair_adder))
+    return seed
+
+
+def max_unit(cards):
+    colors = [[] for _ in range(3)]
+    singles = []
+    for item in sorted(cards):
+        if item//10 < 3:
+            colors[item//10].append(item)
+        else:
+            singles.append(item)
+    result = [(0,0)]
+    for item in colors:
+        result = vec_strip(join_list(result, color_stat(item), pair_adder))
+    result = vec_strip(join_list(result, handle_singles(singles), pair_adder))
     return result
-'''
+
+
+def eval_stat(p):
+    two_coef = 0.99
+    two_coef = 0.6
+    #two_coef = 1.00
+    return p[0] + two_coef * (min(p[1], 1))
+
+
+def eval_naive(cards):
+    return sorted(map(eval_stat, max_unit(cards)), reverse=True)[0]
+
+
+def list_sub(a, b):
+    sorted_a = sorted(a)
+    sorted_b = sorted(b)
+    result = []
+    for i in sorted_a:
+        if i not in sorted_b:
+            result.append(i)
+        else:
+            idx = sorted_b.index(i)
+            del sorted_b[idx]
+    return result
+
+
+def delta_prob(cards):
+    delta = count(list_sub(all_cards(), cards))
+    s = sum(delta.values())
+    #print('sum is', s, 'cards', cards, 'delta', delta)
+    for k in delta:
+        delta[k] /= s
+    return delta
+
+
+def eval_rec(cards, f, verbose=False):
+    if verbose:
+        print('所有牌')
+        print(display_cards(cards))
+    prob = delta_prob(cards)
+    base_metric = eval_naive(cards)
+    final_metric = 0
+    for k in prob:
+        metric = f(cards + [k])
+        final_metric += prob[k] * metric
+        if verbose:
+            print('摸牌:', card_to_str(k), '概率', prob[k], '得分', '%.2f'%base_metric,'+', '%.2f'%(metric-base_metric))
+    if verbose:
+        print('最终指标', final_metric)
+    return final_metric
+
+def eval1(cards):
+    return eval_rec(cards, eval_naive)
+
+def eval2(cards):
+    return eval_rec(cards, eval1)
+
+
+def select14(cards, metric_f=eval_naive):
+    best = []
+    handled = set()
+    #eps = 1e-6
+    for idx in range(len(cards)):
+        if cards[idx] in handled:
+            continue
+        handled.add(cards[idx])
+        cards_clone = cards[:]
+        del cards_clone[idx]
+        metric = metric_f(cards_clone)
+        best.append((metric, cards[idx]))
+    '''
+        if len(best) == 0 or metric > best[0][0] + eps:
+            best = [(metric, idx)]
+        elif metric > best[0][0] - eps:
+            best.append((metric, idx))
+    '''
+    #return sorted(list(set([cards[idx] for _, idx in best])))
+    return sorted(best, reverse=True)
 
