@@ -1,5 +1,7 @@
 import traceback
 import random
+from collections import defaultdict
+import operator
 
 
 def verbose_f(f):
@@ -18,46 +20,24 @@ def verbose_f(f):
     return result_f
 
 
+def count(x):
+    result = defaultdict(int)
+    for item in x:
+        result[item] += 1
+    return result
+
+
+def join_list(xs, ys, f=operator.add):
+    return [f(x, y) for x in xs for y in ys]
+
+
+def pair_adder(x, y):
+    return x[0]+y[0], x[1]+y[1]
+
+
 def assert_eq(res, gt):
     assert res == gt, str(res) + ' should be equal to ' + str(gt)
 
 
-def rand_card():
-    invalid_set = set([10,20,30])
-    candidate = random.randrange(1,38)
-    while candidate in invalid_set:
-        candidate = random.randrange(1,38)
-    return candidate
-
-
-def rand_card_no_single():
-    invalid_set = set([10,20,30])
-    candidate = random.randrange(1,30)
-    while candidate in invalid_set:
-        candidate = random.randrange(1,30)
-    return candidate
-
-
-def rand_single_color(l=13):
-    cnt = 0
-    d = {}
-    while cnt < l:
-        candidate = random.randrange(1, 10)
-        if candidate not in d:
-            d[candidate] = 0
-        if d[candidate] == 4:
-            continue
-        d[candidate] += 1
-        cnt += 1
-    result = []
-    for k, v in sorted(d.items()):
-        result += [k]*v
-    return result
-
-
-def rand_seq(l=13):
-    return [rand_card() for _ in range(l)]
-
-
-def rand_seq_no_single(l=13):
-    return [rand_card_no_single() for _ in range(l)]
+def assert_same(x):
+    assert len(count(x).keys()) == 1, str(x) + ' should have only one type'

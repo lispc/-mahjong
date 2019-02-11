@@ -1,16 +1,17 @@
-from constants import *
+from tile import *
 from utils import *
 from algo import *
+import time
 
 
 def test_max_unit():
-    assert_eq(handle_singles([east, east, east, west, west, west]), [(2,0),(1,1),(0,2)])
+    assert_eq(handle_honors([east, east, east, west, west, west]), EvalResult.from_list([(2,0),(1,1),(0,2)]))
     cnt = 0
     while cnt != 0:
         cnt -= 1
-        cards = rand_seq()
-        print(display_cards(cards))
-        print(max_unit(cards))
+        tiles = rand_seq()
+        print(display_tiles(tiles))
+        print(eval0(tiles))
 
 
 def test_scatter():
@@ -26,31 +27,34 @@ def test_list_sub():
 
 
 def test_select():
+    tiles = [6, 7, 8, 11, 11, 11, 12, 13, 18, 18, 22, 28, 2, 29]
+    assert_eq(select14(tiles, with_prob=False)[:2], [wan2, tong2])
+    tiles = [2, 5, 5, 6, 11, 11, 14, 24, 26, 28, 28, 29, 33, 36]
+    assert_eq(select14(tiles, with_prob=False)[:2], [blank, south])
+    tiles = [1, 1, 1, 7, 8, 13, 16, 16, 18, 6, 7, 8, 31, 33]
+    assert_eq(select14(tiles, with_prob=False)[:3], [south, east, suo3])
+    tiles = [11, 16, 18, 18, 21, 21, 21, 21, 26, 27, 34, 36, 36, 37]
+    assert_eq(select14(tiles, with_prob=False)[:4], [facai, north, tong1, suo1])
 
+
+def demo_select():
     def check(seq):
         print('14张牌:', seq)
-        print(display_cards(seq))
-        #print('建议出牌(算法1):', display_cards(select14(seq, eval_naive), False))
-        res = select14(seq, eval2)
+        print(display_tiles(seq))
+        res = select14(seq)
         print('建议出牌:')
         for m, c in res[:5]:
-            print(card_to_str(c), '%.3f'%m)
+            print(tile_to_str(c), '%.3f'%m)
         print('')
-    while False:
-        cards = [6,7,8,11,11,11,12,13,18,18,22,28,2,29]
-        check(cards)
-        break
-        cards = [2, 5, 5, 6, 11, 11, 14, 24, 26, 28, 28, 29, 33, 36]
-        check(cards)
-        cards = [1, 1, 1, 7, 8, 13, 16, 16, 18, 6, 7, 8, 31, 33]
-        check(cards)
-        cards = [11,16,18,18,21,21,21,21,26,27,34,36,36,37]
-        check(cards)
-    cnt = 10
-    while cnt != 0:
-        cnt -= 1
-        cards = rand_seq_no_single(14)
-        check(cards)
+    cnt = 5
+    start = time.time()
+    i = 0
+    while i < cnt:
+        i += 1
+        tiles = rand_seq_no_single(14)
+        check(tiles)
+    end = time.time()
+    print('avg time is', (end-start)/cnt)
 
 
 def test_add():
@@ -62,12 +66,12 @@ def test_add():
     #print(repr(sets))
     sets.add(wan3, 4)
     #print(repr(sets))
-    #print(sets.get_gram_stat())
+    print(sets.get_gram_stat())
     assert_eq(sets.max3(), 4)
 
-def max3seq(cards):
+def max3seq(tiles):
     sets = ActiveSets()
-    sets.from_list(cards)
+    sets.from_list(tiles)
     #print(repr(sets))
     #print(sets.get_gram_stat())
     return sets.max3()
@@ -81,8 +85,8 @@ def test_max3():
     cnt = 0
     while cnt != 0:
         cnt -= 1
-        cards = rand_single_color()
-        print(sorted(cards), max3seq(cards))
+        tiles = rand_single_color()
+        print(sorted(tiles), max3seq(tiles))
 
 def test_slice():
     assert_eq(to_slice(1), [
@@ -106,11 +110,12 @@ def test_slice():
 
 
 if __name__ == '__main__':
+    test_list_sub()
     test_slice()
     test_scatter()
     test_append()
     test_add()
     test_max3()
     test_max_unit()
-    test_select()
-    test_list_sub()
+    #test_select()
+    demo_select()

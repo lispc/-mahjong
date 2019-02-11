@@ -1,4 +1,7 @@
 from collections import defaultdict
+import random
+
+
 wan1 = 1
 wan2 = 2
 wan3 = 3
@@ -38,17 +41,10 @@ blank = 36
 facai = 37
 
 
-def all_cards():
+def all_tiles():
     result = list(range(1,10)) + list(range(11,20)) + list(range(21,30)) + list(range(31,38))
     result *= 4
     return sorted(result)
-
-
-def count(x):
-    result = defaultdict(int)
-    for item in x:
-        result[item] += 1
-    return result
 
 
 def split_by_category(x, count=False):
@@ -59,7 +55,7 @@ def split_by_category(x, count=False):
     return result
 
 
-def card_to_str(i):
+def tile_to_str(i):
     single = ['东风','西风','南风','北风','红中','白板','发财']
     color = ['万', '条', '筒']
     num = list('一二三四五六七八九')
@@ -69,12 +65,53 @@ def card_to_str(i):
         return single[i-31]
 
 
-def display_cards(cards, newline=True):
-    category = split_by_category(cards)
+def display_tiles(tiles, newline=True):
+    category = split_by_category(tiles)
     result_str = ''
     for c in category:
-        result_str += ','.join(map(card_to_str, c))
+        result_str += ','.join(map(tile_to_str, c))
         if len(c) != 0:
             result_str += '\n' if newline else ' '
     result_str = result_str.rstrip()
     return result_str
+
+
+def rand_tile():
+    invalid_set = set([10,20,30])
+    candidate = random.randrange(1,38)
+    while candidate in invalid_set:
+        candidate = random.randrange(1,38)
+    return candidate
+
+
+def rand_tile_no_single():
+    invalid_set = set([10,20,30])
+    candidate = random.randrange(1,30)
+    while candidate in invalid_set:
+        candidate = random.randrange(1,30)
+    return candidate
+
+
+def rand_single_color(l=13):
+    cnt = 0
+    d = {}
+    while cnt < l:
+        candidate = random.randrange(1, 10)
+        if candidate not in d:
+            d[candidate] = 0
+        if d[candidate] == 4:
+            continue
+        d[candidate] += 1
+        cnt += 1
+    result = []
+    for k, v in sorted(d.items()):
+        result += [k]*v
+    return result
+
+
+def rand_seq(l=13):
+    return [rand_tile() for _ in range(l)]
+
+
+def rand_seq_no_single(l=13):
+    return [rand_tile_no_single() for _ in range(l)]

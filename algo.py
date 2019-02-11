@@ -1,8 +1,9 @@
 from collections import defaultdict
 import copy
 from utils import *
-from constants import *
+from tile import *
 import operator
+import config
 
 
 def scatter(slots, num):
@@ -76,8 +77,8 @@ class ActiveSet:
                 del self.active[item]
         #print('freeze to', repr(self))
 
-    def add(self, card, num):
-        self.strip_dead(card-1)
+    def add(self, tile, num):
+        self.strip_dead(tile-1)
         slices = to_slice(num)
         results = []
         for ptn in slices:
@@ -86,17 +87,17 @@ class ActiveSet:
             to_add_num = len(single_items)
             new_non_active = copy.deepcopy(self.non_active)
             for n in multi_items:
-                k = (card,) * n
+                k = (tile,) * n
                 if k not in new_non_active:
                     new_non_active[k] = 0
                 new_non_active[k] += 1
-            for x in multi_append(self.active, card, to_add_num):
+            for x in multi_append(self.active, tile, to_add_num):
                 new_item = ActiveSet()
                 new_item.active = x
                 new_item.non_active = copy.deepcopy(new_non_active)
                 new_item.parent = self
                 new_item.freeze()
-                new_item.strip_dead(card)
+                new_item.strip_dead(tile)
                 results.append(new_item)
         return results
 
@@ -106,17 +107,17 @@ class ActiveSets:  # single color
         self.cur = [ActiveSet()]
 
     #@verbose_f
-    def add(self, card, num):
+    def add(self, tile, num):
         new_cur = []
         for item in self.cur:
-            new_cur += item.add(card, num)
+            new_cur += item.add(tile, num)
         self.cur = new_cur
 
     def __repr__(self):
         return 'ActiveSets\n\t' + '\n\t'.join(map(repr, self.cur))
 
     def max3(self):
-        return self.get_gram_stat()[0][0]
+        return self.get_gram_stat().max3()
 
     def from_list(self, l):
         count = defaultdict(int)
@@ -126,7 +127,7 @@ class ActiveSets:  # single color
             self.add(k, v)
 
     def get_gram_stat(self):
-        result = set()
+        result = []
         for item in self.cur:
             two_count = 0
             three_count = 0
@@ -137,22 +138,8 @@ class ActiveSets:  # single color
                     three_count += v
                 else:
                     assert False, 'wtf' + repr(item)
-            result.add((three_count, two_count))
-        return vec_strip(result)
-
-
-def vec_strip(x):
-    s = sorted(x, reverse=True)
-    result = [s[0]]
-    for item in s[1:]:
-        skip = False
-        for c in result:
-            if c[0] >= item[0] and c[1] >= item[1]:
-                skip = True
-                break
-        if not skip:
-            result.append(item)
-    return result
+            result.append((three_count, two_count))
+        return EvalResult.from_list(result)
 
 
 class Seq:
@@ -167,14 +154,6 @@ def color_stat(l):
     return sets.get_gram_stat()
 
 
-def assert_same(x):
-    assert len(count(x).keys()) == 1, str(x) + ' should have only one type'
-
-
-def join_list(xs, ys, f=operator.add):
-    return [f(x, y) for x in xs for y in ys]
-
-
 def to_slice(i, max_len=3):
     if i == 0:
         return [[]]
@@ -186,51 +165,102 @@ def to_slice(i, max_len=3):
 
 def handle_single(n):
     if n == 1:
-        return [(0,0)]
+        return EvalResult.from_list([(0,0)])
     if n == 2:
-        return [(0,1)]
+        return EvalResult.from_list([(0,1)])
     if n == 3:
-        return [(1,0),(0,1)]
+        return EvalResult.from_list([(1,0),(0,1)])
     if n == 4:
-        return [(1,0),(0,2)]
+        return EvalResult.from_list([(1,0),(0,2)])
 
 
-def pair_adder(x, y):
-    return x[0]+y[0], x[1]+y[1]
+class Algo1:
+    def __init__(self):
+        self.cache = {}
 
 
-def handle_singles(l):
+class EvalLeafResult:
+    def __init__(self, melds_num=0, pairs_num=0):
+        self.melds_num = melds_num
+        self.pairs_num = pairs_num
+
+    def __add__(self, other):
+        return EvalLeafResult(self.melds_num + other.melds_num, self.pairs_num + other.pairs_num)
+
+    def __lt__(self, other):
+        if self.melds_num < other.melds_num:
+            return True
+        if self.melds_num == other.melds_num and self.pairs_num < self.pairs_num:
+            return True
+        return False
+
+    def __eq__(self, other):
+        return self.melds_num == other.melds_num and self.pairs_num == other.pairs_num
+
+    def metric(self):
+        return self.melds_num + config.pair_coef * (min(self.pairs_num, 1))
+
+    def __repr__(self):
+        return '(%d,%d)'%(self.melds_num, self.pairs_num)
+
+
+class EvalResult:
+    def __init__(self):
+        self.leafs = [EvalLeafResult()]
+
+    def merge(self, other):
+        self.leafs = EvalResult.strip(join_list(self.leafs, other.leafs))
+
+    def metric(self):
+        return sorted([item.metric() for item in self.leafs], reverse=True)[0]
+
+    def max3(self):
+        return self.leafs[0].melds_num
+
+    @staticmethod
+    def strip(x):
+        s = sorted(x, reverse=True)
+        result = [s[0]]
+        for item in s[1:]:
+            skip = False
+            for c in result:
+                if c.melds_num >= item.melds_num and c.pairs_num >= item.pairs_num:
+                    skip = True
+                    break
+            if not skip:
+                result.append(item)
+        return result
+
+    @staticmethod
+    def from_list(x):
+        r = EvalResult()
+        r.leafs = [EvalLeafResult(m, p) for m, p in sorted(list(set(x)), reverse=True)]
+        return r
+
+    def __repr__(self):
+        return '['+','.join(map(repr, self.leafs))+']'
+
+    def __eq__(self, other):
+        return self.leafs == other.leafs
+
+
+
+def handle_honors(l):
     c = count(l)
-    seed = [(0,0)]
+    result = EvalResult()
     for k, v in c.items():
-        seed = vec_strip(join_list(seed, handle_single(v), pair_adder))
-    return seed
-
-
-def max_unit(cards):
-    colors = [[] for _ in range(3)]
-    singles = []
-    for item in sorted(cards):
-        if item//10 < 3:
-            colors[item//10].append(item)
-        else:
-            singles.append(item)
-    result = [(0,0)]
-    for item in colors:
-        result = vec_strip(join_list(result, color_stat(item), pair_adder))
-    result = vec_strip(join_list(result, handle_singles(singles), pair_adder))
+        result.merge(handle_single(v))
+        #print(handle_single(v))
     return result
 
 
-def eval_stat(p):
-    two_coef = 0.99
-    two_coef = 0.6
-    #two_coef = 1.00
-    return p[0] + two_coef * (min(p[1], 1))
-
-
-def eval_naive(cards):
-    return sorted(map(eval_stat, max_unit(cards)), reverse=True)[0]
+def eval0(tiles):
+    splits = split_by_category(tiles)
+    result = EvalResult()
+    for item in splits[:3]:
+        result.merge(color_stat(item))
+    result.merge(handle_honors(splits[-1]))
+    return result.metric()
 
 
 def list_sub(a, b):
@@ -246,56 +276,53 @@ def list_sub(a, b):
     return result
 
 
-def delta_prob(cards):
-    delta = count(list_sub(all_cards(), cards))
+def delta_prob(tiles):
+    delta = count(list_sub(all_tiles(), tiles))
     s = sum(delta.values())
-    #print('sum is', s, 'cards', cards, 'delta', delta)
+    #print('sum is', s, 'tiles', tiles, 'delta', delta)
     for k in delta:
         delta[k] /= s
     return delta
 
 
-def eval_rec(cards, f, verbose=False):
+def eval_rec(tiles, f, verbose=False):
     if verbose:
         print('所有牌')
-        print(display_cards(cards))
-    prob = delta_prob(cards)
-    base_metric = eval_naive(cards)
+        print(display_tiles(tiles))
+    prob = delta_prob(tiles)
+    base_metric = f(tiles)
     final_metric = 0
     for k in prob:
-        metric = f(cards + [k])
+        metric = f(tiles + [k])
         final_metric += prob[k] * metric
         if verbose:
-            print('摸牌:', card_to_str(k), '概率', prob[k], '得分', '%.2f'%base_metric,'+', '%.2f'%(metric-base_metric))
+            print('摸牌:', tile_to_str(k), '概率', prob[k], '得分', '%.2f'%base_metric,'+', '%.2f'%(metric-base_metric))
     if verbose:
         print('最终指标', final_metric)
     return final_metric
 
-def eval1(cards):
-    return eval_rec(cards, eval_naive)
 
-def eval2(cards):
-    return eval_rec(cards, eval1)
+def eval1(tiles):
+    return eval_rec(tiles, eval0)
 
 
-def select14(cards, metric_f=eval_naive):
+def eval2(tiles):
+    return eval_rec(tiles, eval1)
+
+
+def select14(tiles, with_prob=True, metric_f=eval2):
     best = []
     handled = set()
-    #eps = 1e-6
-    for idx in range(len(cards)):
-        if cards[idx] in handled:
+    for idx in range(len(tiles)):
+        if tiles[idx] in handled:
             continue
-        handled.add(cards[idx])
-        cards_clone = cards[:]
-        del cards_clone[idx]
-        metric = metric_f(cards_clone)
-        best.append((metric, cards[idx]))
-    '''
-        if len(best) == 0 or metric > best[0][0] + eps:
-            best = [(metric, idx)]
-        elif metric > best[0][0] - eps:
-            best.append((metric, idx))
-    '''
-    #return sorted(list(set([cards[idx] for _, idx in best])))
-    return sorted(best, reverse=True)
+        handled.add(tiles[idx])
+        tiles_clone = tiles[:]
+        del tiles_clone[idx]
+        metric = metric_f(tiles_clone)
+        best.append((metric, tiles[idx]))
+    result = sorted(best, reverse=True)
+    if not with_prob:
+        return [item for _, item in result]
+    return result
 
