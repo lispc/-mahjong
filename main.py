@@ -4,8 +4,8 @@ from algo import *
 import time
 
 
-def test_max_unit():
-    assert_eq(handle_honors([east, east, east, west, west, west]), EvalResult.from_list([(2,0),(1,1),(0,2)]))
+def test_eval_honors():
+    assert_eq(eval_honors([east, east, east, west, west, west]), EvalResult.from_list([(2,0),(1,1),(0,2)]))
     cnt = 0
     while cnt != 0:
         cnt -= 1
@@ -57,27 +57,11 @@ def demo_select():
     print('avg time is', (end-start)/cnt)
 
 
-def test_add():
-    sets = ActiveSets()
-    #print(repr(sets))
-    sets.add(wan1, 4)
-    #print(repr(sets))
-    sets.add(wan2, 4)
-    #print(repr(sets))
-    sets.add(wan3, 4)
-    #print(repr(sets))
-    print(sets.get_gram_stat())
-    assert_eq(sets.max3(), 4)
-
-def max3seq(tiles):
-    sets = ActiveSets()
-    sets.from_list(tiles)
-    #print(repr(sets))
-    #print(sets.get_gram_stat())
-    return sets.max3()
-
-def test_max3():
+def test_eval_suit():
+    def max3seq(l):
+        return eval_suit(l).max3()
     assert_eq(max3seq([1, 2, 3, 4, 4, 5, 5, 6, 6]), 3)
+    assert_eq(max3seq([1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3]), 4)
     assert_eq(max3seq([1, 2, 3, 5, 6, 7]), 2)
     assert_eq(max3seq([1, 1, 2, 2, 3, 3]), 2)  # 123 123
     assert_eq(max3seq([1, 1, 2, 2, 3, 3, 3, 4, 4, 5, 6, 6, 9]), 3) # 123 123 345|456
@@ -87,6 +71,7 @@ def test_max3():
         cnt -= 1
         tiles = rand_single_color()
         print(sorted(tiles), max3seq(tiles))
+
 
 def test_slice():
     assert_eq(to_slice(1), [
@@ -114,8 +99,7 @@ if __name__ == '__main__':
     test_slice()
     test_scatter()
     test_append()
-    test_add()
-    test_max3()
-    test_max_unit()
-    #test_select()
+    test_eval_suit()
+    test_eval_honors()
+    test_select()
     demo_select()

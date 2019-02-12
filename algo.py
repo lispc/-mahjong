@@ -1,9 +1,28 @@
 from collections import defaultdict
 import copy
 from utils import *
-from tile import *
+import tile
 import operator
 import config
+
+
+class TilePool:
+    def __init__(self):
+        self.pool = count(tile.all_tiles())
+        self.num = sum(self.pool.values())
+
+    def consume(self, t):
+        if t not in self.pool:
+            raise "invalid tile " + str(t)
+        if self.pool[t] == 1:
+            del self.pool
+        else:
+            self.pool[t] -= 1
+        self.num -= 1
+
+    def consume_multi(self, l):
+        for item in l:
+            self.consume(item)
 
 
 def scatter(slots, num):
@@ -53,7 +72,7 @@ def multi_append(base, item_to_add, item_num):
         return results
 
 
-class ActiveSet:
+class State:
     def __init__(self):
         self.active = {} # tuple -> count
         self.non_active = {}
@@ -77,7 +96,8 @@ class ActiveSet:
                 del self.active[item]
         #print('freeze to', repr(self))
 
-    def add(self, tile, num):
+
+    def transit(self, tile, num):
         self.strip_dead(tile-1)
         slices = to_slice(num)
         results = []
@@ -92,7 +112,7 @@ class ActiveSet:
                     new_non_active[k] = 0
                 new_non_active[k] += 1
             for x in multi_append(self.active, tile, to_add_num):
-                new_item = ActiveSet()
+                new_item = State()
                 new_item.active = x
                 new_item.non_active = copy.deepcopy(new_non_active)
                 new_item.parent = self
@@ -102,56 +122,44 @@ class ActiveSet:
         return results
 
 
-class ActiveSets:  # single color
-    def __init__(self):
-        self.cur = [ActiveSet()]
-
-    #@verbose_f
-    def add(self, tile, num):
-        new_cur = []
-        for item in self.cur:
-            new_cur += item.add(tile, num)
-        self.cur = new_cur
-
-    def __repr__(self):
-        return 'ActiveSets\n\t' + '\n\t'.join(map(repr, self.cur))
-
-    def max3(self):
-        return self.get_gram_stat().max3()
-
-    def from_list(self, l):
-        count = defaultdict(int)
-        for item in l:
-            count[item] += 1
-        for k, v in sorted(count.items()):
-            self.add(k, v)
-
-    def get_gram_stat(self):
-        result = []
-        for item in self.cur:
-            two_count = 0
-            three_count = 0
-            for k, v in item.non_active.items():
-                if len(k) == 2:
-                    two_count += v
-                elif len(k) == 3:
-                    three_count += v
-                else:
-                    assert False, 'wtf' + repr(item)
-            result.append((three_count, two_count))
-        return EvalResult.from_list(result)
+def eval_suit(l):
+    r = EvalResult()
+    last_tile = None
+    seq_count = ()
+    for t, num in sorted(count(l).items()):
+        if last_tile is not None and t - last_tile == 1:
+                last_tile = t
+                seq_count = seq_count + (num,)
+                continue
+        else:
+            r.merge(eval_seq(seq_count))
+            last_tile = t
+            seq_count = (num,)
+    r.merge(eval_seq(seq_count))
+    return r
 
 
-class Seq:
-    def __init__(self, start, length):
-        self.start = start
-        self.length = length
-
-
-def color_stat(l):
-    sets = ActiveSets()
-    sets.from_list(l)
-    return sets.get_gram_stat()
+@cache_f
+def eval_seq(c):
+    states = [State()]
+    for idx, num in enumerate(c):
+        new_states = []
+        for s in states:
+            new_states += s.transit(idx, num)
+        states = new_states
+    result = []
+    for item in states:
+        two_count = 0
+        three_count = 0
+        for k, v in item.non_active.items():
+            if len(k) == 2:
+                two_count += v
+            elif len(k) == 3:
+                three_count += v
+            else:
+                assert False, 'wtf' + repr(item)
+        result.append((three_count, two_count))
+    return EvalResult.from_list(result)
 
 
 def to_slice(i, max_len=3):
@@ -163,7 +171,7 @@ def to_slice(i, max_len=3):
     return result
 
 
-def handle_single(n):
+def eval_one_honor_tile(n):
     if n == 1:
         return EvalResult.from_list([(0,0)])
     if n == 2:
@@ -172,11 +180,6 @@ def handle_single(n):
         return EvalResult.from_list([(1,0),(0,1)])
     if n == 4:
         return EvalResult.from_list([(1,0),(0,2)])
-
-
-class Algo1:
-    def __init__(self):
-        self.cache = {}
 
 
 class EvalLeafResult:
@@ -244,22 +247,20 @@ class EvalResult:
         return self.leafs == other.leafs
 
 
-
-def handle_honors(l):
+def eval_honors(l):
     c = count(l)
     result = EvalResult()
     for k, v in c.items():
-        result.merge(handle_single(v))
-        #print(handle_single(v))
+        result.merge(eval_one_honor_tile(v))
     return result
 
 
-def eval0(tiles):
-    splits = split_by_category(tiles)
+def eval0(l):
+    splits = tile.split_by_category(l)
     result = EvalResult()
     for item in splits[:3]:
-        result.merge(color_stat(item))
-    result.merge(handle_honors(splits[-1]))
+        result.merge(eval_suit(item))
+    result.merge(eval_honors(splits[-1]))
     return result.metric()
 
 
@@ -277,7 +278,7 @@ def list_sub(a, b):
 
 
 def delta_prob(tiles):
-    delta = count(list_sub(all_tiles(), tiles))
+    delta = count(list_sub(tile.all_tiles(), tiles))
     s = sum(delta.values())
     #print('sum is', s, 'tiles', tiles, 'delta', delta)
     for k in delta:
@@ -288,7 +289,7 @@ def delta_prob(tiles):
 def eval_rec(tiles, f, verbose=False):
     if verbose:
         print('所有牌')
-        print(display_tiles(tiles))
+        print(tile.display_tiles(tiles))
     prob = delta_prob(tiles)
     base_metric = f(tiles)
     final_metric = 0
@@ -296,7 +297,7 @@ def eval_rec(tiles, f, verbose=False):
         metric = f(tiles + [k])
         final_metric += prob[k] * metric
         if verbose:
-            print('摸牌:', tile_to_str(k), '概率', prob[k], '得分', '%.2f'%base_metric,'+', '%.2f'%(metric-base_metric))
+            print('摸牌:', tile.tile_to_str(k), '概率', prob[k], '得分', '%.2f'%base_metric,'+', '%.2f'%(metric-base_metric))
     if verbose:
         print('最终指标', final_metric)
     return final_metric

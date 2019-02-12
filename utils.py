@@ -20,6 +20,17 @@ def verbose_f(f):
     return result_f
 
 
+def cache_f(f):
+    d = {}
+    def result_f(*args):
+        if args in d:
+            return d[args]
+        result = f(*args)
+        d[args] = result
+        return result
+    return result_f
+
+
 def count(x):
     result = defaultdict(int)
     for item in x:

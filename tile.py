@@ -47,7 +47,7 @@ def all_tiles():
     return sorted(result)
 
 
-def split_by_category(x, count=False):
+def split_by_category(x):
     sorted_x = sorted(x)
     result = [[], [], [], []]
     for item in sorted_x:
@@ -77,7 +77,7 @@ def display_tiles(tiles, newline=True):
 
 
 def rand_tile():
-    invalid_set = set([10,20,30])
+    invalid_set = {10,20,30}
     candidate = random.randrange(1,38)
     while candidate in invalid_set:
         candidate = random.randrange(1,38)
@@ -85,7 +85,7 @@ def rand_tile():
 
 
 def rand_tile_no_single():
-    invalid_set = set([10,20,30])
+    invalid_set = {10,20,30}
     candidate = random.randrange(1,30)
     while candidate in invalid_set:
         candidate = random.randrange(1,30)
