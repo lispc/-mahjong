@@ -1,6 +1,6 @@
 from collections import defaultdict
 import random
-
+from utils import *
 
 wan1 = 1
 wan2 = 2
@@ -47,6 +47,10 @@ def all_tiles():
     return sorted(result)
 
 
+def all_tiles_as_dict():
+    return count(all_tiles())
+
+
 def split_by_category(x):
     sorted_x = sorted(x)
     result = [[], [], [], []]
@@ -67,12 +71,12 @@ def tile_to_str(i):
 
 def display_tiles(tiles, newline=True):
     category = split_by_category(tiles)
-    result_str = ''
+    result_str = '\n' if newline else ''
     for c in category:
         result_str += ','.join(map(tile_to_str, c))
         if len(c) != 0:
             result_str += '\n' if newline else ' '
-    result_str = result_str.rstrip()
+    #result_str = result_str.rstrip()
     return result_str
 
 

@@ -52,3 +52,28 @@ def assert_eq(res, gt):
 
 def assert_same(x):
     assert len(count(x).keys()) == 1, str(x) + ' should have only one type'
+
+
+def list_sub(a, b):
+    sorted_a = sorted(a)
+    sorted_b = sorted(b)
+    result = []
+    for i in sorted_a:
+        if i not in sorted_b:
+            result.append(i)
+        else:
+            idx = sorted_b.index(i)
+            del sorted_b[idx]
+    return result
+
+
+def dict_sub(a, b):
+    result = {}
+    for k in a:
+        if k in b:
+            assert a[k] >= b[k], str(k) + ' ' + str(a) + ' ' + str(b)
+            if a[k] - b[k] != 0:
+                result[k] = a[k] - b[k]
+        else:
+            result[k] = a[k]
+    return result

@@ -4,6 +4,7 @@ from utils import *
 import tile
 import operator
 import config
+import type
 
 
 class TilePool:
@@ -203,6 +204,9 @@ class EvalLeafResult:
     def metric(self):
         return self.melds_num + config.pair_coef * (min(self.pairs_num, 1))
 
+    def is_succ(self):
+        return self.melds_num == 4 and self.pairs_num == 1
+
     def __repr__(self):
         return '(%d,%d)'%(self.melds_num, self.pairs_num)
 
@@ -246,6 +250,9 @@ class EvalResult:
     def __eq__(self, other):
         return self.leafs == other.leafs
 
+    def is_succ(self):
+        return any(item.is_succ() for item in self.leafs)
+
 
 def eval_honors(l):
     c = count(l)
@@ -255,46 +262,34 @@ def eval_honors(l):
     return result
 
 
-def eval0(l):
+def eval_naive(l):
     splits = tile.split_by_category(l)
     result = EvalResult()
     for item in splits[:3]:
         result.merge(eval_suit(item))
     result.merge(eval_honors(splits[-1]))
-    return result.metric()
-
-
-def list_sub(a, b):
-    sorted_a = sorted(a)
-    sorted_b = sorted(b)
-    result = []
-    for i in sorted_a:
-        if i not in sorted_b:
-            result.append(i)
-        else:
-            idx = sorted_b.index(i)
-            del sorted_b[idx]
     return result
 
 
-def delta_prob(tiles):
-    delta = count(list_sub(tile.all_tiles(), tiles))
-    s = sum(delta.values())
-    #print('sum is', s, 'tiles', tiles, 'delta', delta)
-    for k in delta:
-        delta[k] /= s
-    return delta
+def is_succ(l):
+    return eval_naive(l).is_succ()
 
 
-def eval_rec(tiles, f, verbose=False):
+def eval0(l, c=type.Context()):
+    return eval_naive(l).metric()
+
+
+def eval_rec(tiles, f, c=type.Context(), verbose=False):
     if verbose:
         print('所有牌')
         print(tile.display_tiles(tiles))
-    prob = delta_prob(tiles)
-    base_metric = f(tiles)
+    prob = c.tile_prob(tiles)
+    base_metric = f(tiles, c)
     final_metric = 0
     for k in prob:
-        metric = f(tiles + [k])
+        new_c = copy.deepcopy(c)
+        #new_c.used[k] = 1 + new_c.used.get(k, 0)
+        metric = f(tiles + [k], new_c)
         final_metric += prob[k] * metric
         if verbose:
             print('摸牌:', tile.tile_to_str(k), '概率', prob[k], '得分', '%.2f'%base_metric,'+', '%.2f'%(metric-base_metric))
@@ -303,15 +298,16 @@ def eval_rec(tiles, f, verbose=False):
     return final_metric
 
 
-def eval1(tiles):
-    return eval_rec(tiles, eval0)
+def eval1(tiles, c=type.Context()):
+    return eval_rec(tiles, eval0, c)
 
 
-def eval2(tiles):
-    return eval_rec(tiles, eval1)
+def eval2(tiles, c=type.Context()):
+    return eval_rec(tiles, eval1, c)
 
 
-def select14(tiles, with_prob=True, metric_f=eval2):
+def select(tiles, with_prob=True, metric_f=eval2, c=type.Context()):
+    assert len(tiles) == 14
     best = []
     handled = set()
     for idx in range(len(tiles)):
@@ -320,7 +316,7 @@ def select14(tiles, with_prob=True, metric_f=eval2):
         handled.add(tiles[idx])
         tiles_clone = tiles[:]
         del tiles_clone[idx]
-        metric = metric_f(tiles_clone)
+        metric = metric_f(tiles_clone, c)
         best.append((metric, tiles[idx]))
     result = sorted(best, reverse=True)
     if not with_prob:
